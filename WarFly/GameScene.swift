@@ -11,79 +11,190 @@ import GameplayKit
 
 class GameScene: SKScene {
     
-    private var label : SKLabelNode?
-    private var spinnyNode : SKShapeNode?
+    let sceneManager = SceneManager.shared
+
+    fileprivate var player: PlayerPlane!
+    fileprivate let hud = HUD()
+    fileprivate let screenSize = UIScreen.main.bounds.size
     
     override func didMove(to view: SKView) {
         
-        // Get label node from scene and store it for use later
-        self.label = self.childNode(withName: "//helloLabel") as? SKLabelNode
-        if let label = self.label {
-            label.alpha = 0.0
-            label.run(SKAction.fadeIn(withDuration: 2.0))
-        }
+        guard sceneManager.gameScene == nil else { return }
         
-        // Create shape node to use during mouse interaction
-        let w = (self.size.width + self.size.height) * 0.05
-        self.spinnyNode = SKShapeNode.init(rectOf: CGSize.init(width: w, height: w), cornerRadius: w * 0.3)
+        sceneManager.gameScene = self
         
-        if let spinnyNode = self.spinnyNode {
-            spinnyNode.lineWidth = 2.5
+        physicsWorld.contactDelegate = self
+        physicsWorld.gravity = CGVector.zero
+        
+        configureStartScene()
+        spawnClouds()
+        spawnIslands()
+        self.player.performFly()
+        
+        spawnPowerUp()
+        spawnSpiralOfEnemies()
+        spawnEnemies()
+        createHUD()
+        
+    }
+    
+    fileprivate func createHUD() {
+        addChild(hud)
+        hud.configureUI(screenSize: screenSize)
+    }
+    
+    fileprivate func spawnPowerUp() {
+        
+        let spawnAction = SKAction.run {
+            let randomNumber = Int(arc4random_uniform(2))
+            let powerUp = randomNumber == 1 ? BluePowerUp() : GreenPowerUp()
+            let randomPositionX = arc4random_uniform(UInt32(self.size.width - 30))
             
-            spinnyNode.run(SKAction.repeatForever(SKAction.rotate(byAngle: CGFloat(Double.pi), duration: 1)))
-            spinnyNode.run(SKAction.sequence([SKAction.wait(forDuration: 0.5),
-                                              SKAction.fadeOut(withDuration: 0.5),
-                                              SKAction.removeFromParent()]))
+            powerUp.position = CGPoint(x: CGFloat(randomPositionX), y: self.size.height + 100)
+            powerUp.startMovement()
+            self.addChild(powerUp)
         }
+        
+        let randomTimeSpawn = Double(arc4random_uniform(11) + 10)
+        let waitAction = SKAction.wait(forDuration: randomTimeSpawn)
+        self.run(SKAction.repeatForever(SKAction.sequence([spawnAction, waitAction])))
+        
     }
     
-    
-    func touchDown(atPoint pos : CGPoint) {
-        if let n = self.spinnyNode?.copy() as! SKShapeNode? {
-            n.position = pos
-            n.strokeColor = SKColor.green
-            self.addChild(n)
+    fileprivate func spawnEnemies() {
+        let waitAction = SKAction.wait(forDuration: 3.0)
+        let spawnSpiralAction = SKAction.run { [unowned self] in
+            self.spawnSpiralOfEnemies()
         }
+        self.run(SKAction.repeatForever(SKAction.sequence([waitAction, spawnSpiralAction])))
     }
     
-    func touchMoved(toPoint pos : CGPoint) {
-        if let n = self.spinnyNode?.copy() as! SKShapeNode? {
-            n.position = pos
-            n.strokeColor = SKColor.blue
-            self.addChild(n)
+    fileprivate func spawnSpiralOfEnemies() {
+        let enemyTextureAtlas1 = Assets.shared.enemy_1Atlas
+        let enemyTextureAtlas2 = Assets.shared.enemy_2Atlas
+        SKTextureAtlas.preloadTextureAtlases([enemyTextureAtlas1, enemyTextureAtlas2]) { [unowned self] in
+            let randomNumber = Int(arc4random_uniform(2))
+            let arrayOfAtlases = [enemyTextureAtlas1, enemyTextureAtlas2]
+            let textureAtlas = arrayOfAtlases[randomNumber]
+            
+            let waitAction = SKAction.wait(forDuration: 1.0)
+            let spawnEnemy = SKAction.run({ [unowned self] in
+                let textureNames = textureAtlas.textureNames.sorted()
+                let texture = textureAtlas.textureNamed(textureNames[12])
+                let enemy = Enemy(enemyTexture: texture)
+                enemy.position = CGPoint(x: self.size.width / 2, y: self.size.height + 110)
+                self.addChild(enemy)
+                enemy.flySpiral()
+            })
+            let spawnAction = SKAction.sequence([waitAction, spawnEnemy])
+            let repeatAction = SKAction.repeat(spawnAction, count: 3 )
+            self.run(repeatAction)
         }
+        
     }
     
-    func touchUp(atPoint pos : CGPoint) {
-        if let n = self.spinnyNode?.copy() as! SKShapeNode? {
-            n.position = pos
-            n.strokeColor = SKColor.red
-            self.addChild(n)
+    fileprivate func spawnClouds() {
+        let spawnCloudWait = SKAction.wait(forDuration: 1)
+        let spawnCloudAction = SKAction.run {
+            let cloud = Cloud.populate(at: nil)
+            self.addChild(cloud)
         }
+        
+        let spawnCloudSequence = SKAction.sequence([spawnCloudWait, spawnCloudAction])
+        let spawnCloudForever = SKAction.repeatForever(spawnCloudSequence)
+        run(spawnCloudForever)
+    }
+    
+    fileprivate func spawnIslands() {
+        let spawnIslandWait = SKAction.wait(forDuration: 1)
+        let spawnIslandAction = SKAction.run {
+            let island = Island.populate(at: nil )
+            self.addChild(island)
+        }
+        
+        let spawnIslandSequence = SKAction.sequence([spawnIslandWait, spawnIslandAction])
+        let spawnIslandForever = SKAction.repeatForever(spawnIslandSequence)
+        run(spawnIslandForever)
+    }
+    
+    fileprivate func configureStartScene() {
+        let screenCenterPoint = CGPoint(x: self.size.width / 2, y: self.size.height / 2)
+        let background = Background.populateBackground(at: screenCenterPoint)
+        background.size = self.size
+        self.addChild(background)
+        
+        let screen = UIScreen.main.bounds
+        
+        let island1 = Island.populate(at: CGPoint(x: 100, y: 200))
+        self.addChild(island1)
+        
+        let island2 = Island.populate(at: CGPoint(x: self.size.width - 100, y: self.size.height - 200))
+        self.addChild(island2)
+        
+        player = PlayerPlane.populate(at: CGPoint(x: screen.size.width / 2, y: 100))
+        self.addChild(player)
+        
+    }
+    
+    override func didSimulatePhysics() {
+        
+        player.checkPosition()
+        
+        enumerateChildNodes(withName: "sprite") { (node, stop) in
+            if node.position.y <= -100 {
+                node.removeFromParent()
+
+            }
+        }
+        
+        enumerateChildNodes(withName: "shotSprite") { (node, stop) in
+            if node.position.y >= self.size.height + 100 {
+                    node.removeFromParent()
+                        
+            }
+        }
+        
+    }
+    
+    fileprivate func playerFire() {
+        let shot = YellowShot()
+        shot.position = self.player.position
+        shot.startMovement()
+        self.addChild(shot)
     }
     
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if let label = self.label {
-            label.run(SKAction.init(named: "Pulse")!, withKey: "fadeInOut")
+        let location = touches.first!.location(in: self)
+        let node = self.atPoint(location)
+        
+        if node.name == "pause" {
+            self.scene?.isPaused = true
+            let transition = SKTransition.doorway(withDuration: 1.0)
+            let pauseScene = PauseScene(size: self.size)
+            pauseScene.scaleMode = .aspectFill
+            self.scene!.view?.presentScene(pauseScene, transition: transition)
+        } else {
+                playerFire()
         }
         
-        for t in touches { self.touchDown(atPoint: t.location(in: self)) }
+    }
+       
+}
+
+extension GameScene: SKPhysicsContactDelegate {
+    func didBegin(_ contact: SKPhysicsContact) {
+        let contactCategory: BitMaskCategory = [contact.bodyA.category, contact.bodyB.category]
+        switch contactCategory {
+        case [.enemy, .player]: print("Enemy vs player")
+        case [.powerUp, .player]: print("PowerUp vs player")
+        case [.enemy, .shot]: print("Enemy vs shot")
+        default:
+            preconditionFailure("Unable to detect collision category")
+        }
+        
     }
     
-    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for t in touches { self.touchMoved(toPoint: t.location(in: self)) }
-    }
-    
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for t in touches { self.touchUp(atPoint: t.location(in: self)) }
-    }
-    
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for t in touches { self.touchUp(atPoint: t.location(in: self)) }
-    }
-    
-    
-    override func update(_ currentTime: TimeInterval) {
-        // Called before each frame is rendered
+    func didEnd(_ contact: SKPhysicsContact) {
+        
     }
 }
