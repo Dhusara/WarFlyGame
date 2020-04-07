@@ -19,12 +19,11 @@ class Assets {
     let playerPlaneAtlas = SKTextureAtlas(named: "PlayerPlane")
     
     func preloadAssets() {
-        yellowShotAtlas.preload {print("ellowShotAtlas preloaded")}
-        enemy_1Atlas.preload {print("enemy_1Atlas preloaded")}
-        enemy_2Atlas.preload {print("enemy_2Atlas preloaded")}
-        greenPowerUpAtlas.preload {print("greenPowerUpAtlas preloaded")}
-        bluePowerUpAtlas.preload {print("bluePowerUpAtlas preloaded")}
-        playerPlaneAtlas.preload {print("playerPlaneAtlas preloaded")}
+        yellowShotAtlas.preload { print("yellowShotAtlas preloaded") }
+        enemy_1Atlas.preload { print("enemy_1Atlas preloaded") }
+        enemy_2Atlas.preload { print("enemy_2Atlas preloaded") }
+        greenPowerUpAtlas.preload { print("greenPowerUpAtlas preloaded") }
+        bluePowerUpAtlas.preload { print("bluePowerUpAtlas preloaded") }
+        playerPlaneAtlas.preload { print("playerPlaneAtlas preloaded") }
     }
-    
 }
